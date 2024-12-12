@@ -1,9 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy.orm import Session
-from app.infrastructure.repository.impl.note_repository_impl import NoteRepositoryImpl
 from app.services.dto.note_dto import NoteDTO, NoteVersionDTO
 from app.services.dto.user_dto import UserDTO
-from app.services.note_service import get_notes_by_user, getHistory
+from app.services.note_service import erase_note, get_notes_by_user, getHistory, create_note, update_existing_note
 from app.services.user_services import get_current_user, register_user
 from app.infrastructure.database import Base, engine
 from app.services.user_services import verify_user
@@ -17,17 +16,15 @@ router = APIRouter()
 @router.post("/register")
 def register(user: UserDTO, db: Session = Depends(get_db)):
     try:
-        user_data = register_user(db, user.username, user.password)
-        return {"message": "User registered successfully", "user_id": user_data.id}
+        register_user(db, user.username, user.password)
+        return {"message": "User registered successfully"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     
 @router.post("/login")
 def login(user: UserDTO, db: Session = Depends(get_db)):
     try:
-        print(user)
         verified_user = verify_user(db, user.username, user.password)
-        print(verified_user)
         access_token = create_access_token(data={"sub": verified_user.username})
         
         return {"access_token": access_token, "token_type": "bearer"}
@@ -51,7 +48,7 @@ def add_note(note: NoteDTO, db: Session = Depends(get_db), current_user: dict = 
     user_id = current_user["sub"]
     
     try:
-        created_note = NoteRepositoryImpl.create_note(db=db, title=note.title, description=note.description, time=note.time, user_id=user_id)
+        created_note = create_note(db=db, title=note.title, description=note.description, time=note.time, user_id=user_id)
         return {"message": "Note created successfully",  "note":created_note}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -65,7 +62,7 @@ def update_note(
 ):
     user_id = current_user["sub"]
     try:
-        NoteRepositoryImpl.update_existing_note(db=db, note_id=note_id, title=note_data.title, description=note_data.description, version=note_data.version, time=note_data.time, user_id=user_id)
+        update_existing_note(db=db, note_id=note_id, title=note_data.title, description=note_data.description, version=note_data.version, time=note_data.time, user_id=user_id)
     except Exception as e:
         raise HTTPException(status_code=e.status_code, detail=str(e.detail))
     return {"message": "Note updated successfully"}
@@ -78,7 +75,7 @@ def delete_note(
 ):
     user_id = current_user["sub"]
     try:
-        NoteRepositoryImpl.erase_note(db=db,note_id=note_id, user_id=user_id)
+        erase_note(db=db,note_id=note_id, user_id=user_id)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     
@@ -86,6 +83,7 @@ def delete_note(
 
 @router.get("/notes/{note_id}/history")
 def get_note_history(note_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    print(note_id)
     user_id = current_user["sub"]
     try:
         history=getHistory(db=db, note_id=note_id, user_id=user_id)
@@ -93,3 +91,4 @@ def get_note_history(note_id: int, db: Session = Depends(get_db), current_user: 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
     return {"history": history}
+    
